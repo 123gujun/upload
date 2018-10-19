@@ -1,8 +1,11 @@
 #include <iostream>
 #include "upload.h"
+#include <time.h>
 
 int main() {
     //std::cout << "Hello, World!" << std::endl;
+
+
 
     char * str[3] = {"png","jpg"};
 
@@ -19,9 +22,13 @@ int main() {
 
     std::string url = "http://192.168.1.173/api/personnels";
 
-    int groupId = 40;
+    int groupId = 44;
+
+
 
     dealBus(filepath,vec,url,groupId);
 
+
+    dealQueryBus(url,groupId);
     return 0;
 }

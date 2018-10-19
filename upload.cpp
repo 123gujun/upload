@@ -9,6 +9,8 @@
 
 std::list <std::string> g_filelist;
 
+
+
 std::list<std::string>& getFileList(std::string filepath,std::vector<std::string> delimeter)
 {
     DIR *dir;
@@ -64,10 +66,7 @@ void performPost(struct PostContent & icontent)
     struct curl_httppost * lastptr = NULL;
 
     char  string[10];
-
-
     sprintf(string,"%d",icontent.groupId);
-
 
 
     /*****body*****/
@@ -82,10 +81,6 @@ void performPost(struct PostContent & icontent)
 
     /*****headers****/
 
-  // curl_formadd()
-
-    //curl_slist * plist = curl_slist_append(NULL,NULL);
-
     curl_slist * plist = curl_slist_append(NULL,"Content-Type:multipart/form-data;charset=UTF-8");
 
    curl = curl_easy_init();  // get a curl handle
@@ -99,8 +94,8 @@ void performPost(struct PostContent & icontent)
        curl_easy_setopt(curl,CURLOPT_HTTPHEADER,plist);
 
 
-       //curl_easy_setopt(curl,)
-
+       curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,write_callback);
+       curl_easy_setopt(curl,CURLOPT_WRITEDATA,UPLOAD_RES);
 
 
        res = curl_easy_perform(curl);
@@ -119,19 +114,48 @@ void performPost(struct PostContent & icontent)
 
 }
 
-size_t write_callback(void * ptr,size_t size,size_t nmemb,void*stream)
-{
+size_t write_callback(void *ptr, size_t size, size_t nmemb, void *stream) {
+    std::string Instr = static_cast< char * >(stream);
 
-   return size * nmemb;
+    FILE *fp = NULL;
+
+    char * ResStr = static_cast<char*>(ptr);
+
+    std::string str = ResStr;
+    Json::Value root ;
+    Json::Reader reader;
+    std::string res;
+
+    if(reader.parse(str,root)) {
+        int value = root["code"].asInt();
+
+        char ss[12];
+        sprintf(ss, "%d", value);
+        res = ss;
+        res += (res == "0" ? "success\n" : "get the failed result!\n");
+    }
+    else
+        res = "write_callback parse failed !\n";
+
+
+    fp = fopen((char *)(Instr.c_str()), "at+");
+
+    if (fp)
+        fwrite(res.c_str(), strlen(res.c_str()), 1, fp);
+
+    fclose(fp);
+    return size * nmemb;
 }
 
 
 void dealBus(std::string & filepath,std::vector <std::string> delimeter,std::string & url,int group_id)
 {
-       //获取文件列表，进行过滤
+       //get filename list
        getFileList(filepath,delimeter);
 
+
        struct PostContent icontent;
+       memset(&icontent,0, sizeof(struct PostContent));
        for(auto & list:g_filelist)
        {
            icontent.path = filepath;
@@ -139,11 +163,103 @@ void dealBus(std::string & filepath,std::vector <std::string> delimeter,std::str
            icontent.url = url;
            icontent.groupId = group_id;
 
-           //执行文件上传
+           //perform to upload
            performPost(icontent);
+
+           memset(&icontent,0, sizeof(struct PostContent));
 
        }
 
+}
 
+size_t query_callback(void*ptr,size_t size,size_t nmemb,void * stream)
+{
+    char* filename = static_cast<char*>(stream);
+
+    char*restr = static_cast<char*>(ptr);
+
+    Json::Value value;
+
+    Json::Reader reader;
+
+    std::string Res;
+
+
+    if(reader.parse(restr,value)){
+
+        int total = value["data"]["total"].asInt();
+
+        int res = (value["code"].asInt() == 0 && total >= 1) ? total : -1 ;
+
+        char tmpstr[128];
+
+        if(res == -1)
+            Res = "get the failed result!\n";
+        else
+            Res = "success!\n";
+    }else{
+
+         Res = "write_callback parse failed !\n";
+    }
+
+    FILE * fp = NULL;
+     fp = fopen(filename, "at+");
+
+    if (fp)
+        fwrite(Res.c_str(), strlen(Res.c_str()), 1, fp);
+
+    fclose(fp);
+    return size * nmemb;
+
+}
+
+void performGet(struct QueryContains & query)
+{
+
+    CURL *curl;
+    CURLcode res;
+
+    char GetStr[128];
+    memset(GetStr,0,128);
+
+    sprintf(GetStr,"%s?group_id=%d&keyword=%s",query.url.c_str(),query.groupId,query.filename.c_str());
+
+    //curl_slist *plist = curl_slist_append(NULL, GetStr);
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();  // get a curl handle
+
+
+    if(curl) {
+        curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,query_callback);
+        curl_easy_setopt(curl,CURLOPT_WRITEDATA,QUERY_RES);
+        curl_easy_setopt(curl,CURLOPT_URL,GetStr);
+
+        res = curl_easy_perform(curl);
+
+        if (res != CURLE_OK)
+            fprintf(stderr, "performGet curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        //always cleanup
+        curl_easy_cleanup(curl);
+
+        //curl_slist_free_all(plist);
+
+    }
+
+    curl_global_cleanup();
+}
+
+void dealQueryBus(std::string & url,int group_id)
+{
+    struct QueryContains query;
+    memset(&query,0,sizeof(struct QueryContains));
+    for(auto list : g_filelist)
+    {
+        query.filename = list;
+        query.url = url;
+        query.groupId = group_id;
+        performGet(query);
+        memset(&query,0,sizeof(struct QueryContains));
+    }
 
 }

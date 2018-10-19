@@ -8,7 +8,13 @@
 #include <string>
 #include <list>
 #include <vector>
+#include <json/json.h>
 
+
+#define  UPLOAD_RES "upload.txt"
+
+
+#define QUERY_RES  "query.txt"
 
 struct PostContent{
 
@@ -18,6 +24,13 @@ struct PostContent{
     int groupId;
 };
 
+
+struct QueryContains{
+
+    std::string url;
+    int groupId;
+    std::string filename;
+};
 
 extern std::list <std::string> g_filelist;
 //filepath 路径
@@ -37,9 +50,10 @@ void dealBus(std::string & filepath,std::vector <std::string> delimeter,std::str
 void performPost(struct PostContent & icontent);
 
 
+size_t query_callback(void*ptr,size_t size,size_t nmemb,void * stream);
 //照片查询
+void performGet(struct QueryContains & query);
 
-
-void searchPhoto(std::string filename,std::string url);
+void dealQueryBus(std::string & url,int group_id);
 
 #endif //UPLOAD_UPLOAD_H
